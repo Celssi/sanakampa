@@ -1,9 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import {Component, OnInit} from '@angular/core';
 import words from '../sanat.json';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, map } from 'rxjs/operators';
-import { MinimumPair } from './MinimumPair';
-import { ProcessPackage } from './ProcessPackage';
+import {Subject} from 'rxjs';
+import {debounceTime, distinctUntilChanged, map} from 'rxjs/operators';
+import {MinimumPair} from './MinimumPair';
+import {ProcessPackage} from './ProcessPackage';
 
 @Component({
   selector: 'app-root',
@@ -42,7 +42,7 @@ export class AppComponent implements OnInit {
 
     this.worker = new Worker(new URL('./app.worker', import.meta.url));
 
-    this.worker.onmessage = ({ data }) => {
+    this.worker.onmessage = ({data}) => {
       if (data.type === 'minimum') {
         this.minimumPairs = data.result;
       } else if (data.type === 'minimum-specific') {
@@ -92,11 +92,11 @@ export class AppComponent implements OnInit {
   }
 
   generateNormalResults(searchPhrase: string): void {
-    this.worker.postMessage({ type: 'normal', searchPhrase } as ProcessPackage);
+    this.worker.postMessage({type: 'normal', searchPhrase} as ProcessPackage);
   }
 
   generateMinimumPairs(searchPhrase: string): void {
-    this.worker.postMessage({ type: 'minimum', searchPhrase } as ProcessPackage);
+    this.worker.postMessage({type: 'minimum', searchPhrase} as ProcessPackage);
   }
 
   generateSpecificMinimumPairs(wantedChange: string): void {
@@ -110,7 +110,7 @@ export class AppComponent implements OnInit {
 
     this.numberOfWordSlices = arrays.length;
     arrays.forEach((sliceOfWords: string[]) => {
-      this.worker.postMessage({ words: sliceOfWords, type: 'minimum-specific', wantedChange } as ProcessPackage);
+      this.worker.postMessage({words: sliceOfWords, type: 'minimum-specific', wantedChange} as ProcessPackage);
     });
   }
 

@@ -2,8 +2,8 @@
 
 import allWords from '../sanat.json';
 import * as levenshtein from 'fast-levenshtein';
-import {MinimumPair} from './MinimumPair';
-import {ProcessPackage} from './ProcessPackage';
+import { MinimumPair } from './MinimumPair';
+import { ProcessPackage } from './ProcessPackage';
 
 function getDifference(a: string, b: string): number {
   if (a.length < b.length) {
@@ -54,7 +54,7 @@ function getLengthArrays(words: string[]): string[][] {
 
 const lengthArrays = getLengthArrays(allWords);
 
-addEventListener('message', ({data}: { data: ProcessPackage }) => {
+addEventListener('message', ({ data }: { data: ProcessPackage }) => {
   if (data.type === 'minimum') {
     const minimumPairs: MinimumPair[] = [];
     const wordCandidates = getWordCandidates(data.searchPhrase);
@@ -63,12 +63,12 @@ addEventListener('message', ({data}: { data: ProcessPackage }) => {
       lengthArrays[wordCandidate.length - 1].forEach((word) => {
         if (levenshtein.get(wordCandidate, word) === 1) {
           const difference = getDifference(wordCandidate, word);
-          minimumPairs.push({word: wordCandidate, pair: word, change: `${wordCandidate[difference]}->${word[difference]}`});
+          minimumPairs.push({ word: wordCandidate, pair: word, change: `${wordCandidate[difference]}->${word[difference]}` });
         }
       });
     });
 
-    postMessage({type: data.type, result: minimumPairs});
+    postMessage({ type: data.type, result: minimumPairs });
   } else if (data.type === 'minimum-specific') {
     let minimumPairs: MinimumPair[] = [];
 
@@ -79,16 +79,16 @@ addEventListener('message', ({data}: { data: ProcessPackage }) => {
           const change = `${wordCandidate[difference]}->${word[difference]}`;
 
           if (isWantedChange(change, data.wantedChange)) {
-            minimumPairs.push({word: wordCandidate, pair: word, change});
+            minimumPairs.push({ word: wordCandidate, pair: word, change });
           }
         }
       });
     });
 
     minimumPairs = minimumPairs.sort((a, b) => a.word.localeCompare(b.word));
-    postMessage({type: data.type, result: minimumPairs});
+    postMessage({ type: data.type, result: minimumPairs });
   } else if (data.type === 'normal') {
     const wordCandidates = getWordCandidates(data.searchPhrase);
-    postMessage({type: data.type, result: wordCandidates});
+    postMessage({ type: data.type, result: wordCandidates });
   }
 });

@@ -1,4 +1,4 @@
-FROM node:14
+FROM node:latest
 EXPOSE 5000
 RUN mkdir /home/node/app
 RUN yarn global add serve @angular/cli

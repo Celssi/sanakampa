@@ -1,5 +1,5 @@
 FROM node:latest
-EXPOSE 5000
+EXPOSE 3000
 RUN mkdir /home/node/app
 RUN yarn global add serve @angular/cli
 COPY ./ /home/node/app

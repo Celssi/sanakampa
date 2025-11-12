@@ -1,111 +1,88 @@
 # Sanakampa
 
-**Sanakampa** (Finnish: "word competition/match") is a specialized linguistic search tool designed for speech therapists and language professionals working with Finnish. It enables pattern-based word searches and minimum pair discovery, which are essential for speech and language therapy assessment and treatment.
+Työkalu puheterapeuteille ja kielenkäytön ammattilaisille suomenkielisten sanojen hakemiseen ja minimiparianalyysin tekemiseen.
 
-🌐 **Live Demo:** https://sanakampa.celssi.fi
+🌐 **Sovellus:** https://sanakampa.celssi.fi
 
-## Features
+## Ominaisuudet
 
-- **Pattern-based word search** with wildcard support
-- **Minimum pairs discovery** - find word pairs that differ by a single phoneme
-- **Phoneme-specific filtering** - search for specific sound changes (e.g., l→j)
-- **Fast search** with Web Worker processing to keep UI responsive
-- **Bilingual interface** - Finnish and English labels
+- Sanojen haku määriteltyjen sääntöjen perusteella
+- Minimiparianalyysi
+- Tiettyjen äännemuutosten etsiminen (esim. l→j)
+- Nopea haku Web Worker -teknologialla
 
-## Search Syntax
+## Hakusyntaksi
 
-| Pattern | Description | Example |
-|---------|-------------|---------|
-| `*` | Matches zero or more characters | `koir*` finds "koira", "koiras" |
-| `%` | Matches exactly one character | `koir%` finds "koira" but not "koiras" |
-| `(k)` | Matches one consonant | `(k)oira` matches "koira", "loira", etc. |
-| `(v)` | Matches one vowel | `k(v)ira` matches "keira", "koira", etc. |
-| `l->j` | Find minimum pairs with specific phoneme change | Finds pairs where 'l' changes to 'j' |
+| Merkki | Kuvaus | Esimerkki |
+|--------|--------|-----------|
+| `*` | Korvaa yhden tai useamman merkin | `koir*` löytää "koira", "koiras" |
+| `%` | Korvaa täsmälleen yhden merkin | `koir%` löytää "koira" mutta ei "koiras" |
+| `(k)` | Korvaa yhden konsonantin | `(k)oira` löytää "koira", "loira" jne. |
+| `(v)` | Korvaa yhden vokaalin | `k(v)ira` löytää "keira", "koira" jne. |
+| `l->j` | Etsi minimipareja tietyllä äännemuutoksella | Löytää parit joissa 'l' muuttuu 'j':ksi |
 
-## Technology Stack
+## Teknologiat
 
-- **Angular 17.3** - Modern web framework
-- **TypeScript** - Type-safe development
-- **TailwindCSS** - Utility-first styling
-- **Web Workers** - Offload heavy computation
-- **RxJS** - Reactive data handling
+- Angular 17.3
+- TypeScript
+- TailwindCSS
+- Web Workers
+- RxJS
 
-## Getting Started
+## Asennus ja käyttö
 
-### Prerequisites
+### Edellytykset
 
-- Node.js 20+ (LTS recommended)
-- Yarn package manager
+- Node.js 20+
+- Yarn
 
-### Installation
+### Kehitysympäristö
 
 ```bash
-# Install dependencies
+# Asenna riippuvuudet
 yarn install
-```
 
-### Development
-
-```bash
-# Start development server
+# Käynnistä kehitysserveri
 ng serve
 
-# Navigate to http://localhost:4200/
-# The app will automatically reload on file changes
+# Avaa http://localhost:4200/
 ```
 
-### Production Build
+### Tuotantoversio
 
 ```bash
-# Build for production
+# Rakenna tuotantoversio
 ng build --configuration production
 
-# Build artifacts will be in dist/ directory
+# Rakennustulokset löytyvät dist/ -hakemistosta
 ```
 
 ### Docker
 
 ```bash
-# Build Docker image
+# Rakenna Docker-image
 docker build -t sanakampa .
 
-# Run container
+# Käynnistä kontti
 docker run -p 3000:3000 sanakampa
 
-# Navigate to http://localhost:3000/
+# Avaa http://localhost:3000/
 ```
 
-## Project Structure
+## Projektin rakenne
 
 ```
 src/
 ├── app/
-│   ├── app.component.ts       # Main component with search logic
-│   ├── app.component.html     # UI template
-│   ├── app.worker.ts          # Web Worker for heavy computation
-│   ├── MinimumPair.ts         # Minimum pair interface
-│   └── ProcessPackage.ts      # Worker message interface
-├── sanat.json                 # Finnish word list (50,000+ words)
-└── styles.scss                # Global styles
+│   ├── app.component.ts       # Pääkomponentti
+│   ├── app.component.html     # UI-pohja
+│   ├── app.worker.ts          # Web Worker laskutoimituksille
+│   ├── MinimumPair.ts         # Minimiparin tietorakenne
+│   └── ProcessPackage.ts      # Worker-viestien tietorakenne
+├── sanat.json                 # Suomenkielinen sanalista (50 000+ sanaa)
+└── styles.scss                # Yleiset tyylit
 ```
 
-## Use Cases
+## Kehitetty
 
-This tool is specifically designed for:
-
-- **Speech-Language Pathologists** - Assessment and therapy planning
-- **Linguistic Research** - Phonological analysis
-- **Language Education** - Creating teaching materials
-- **Phonetics Study** - Minimal pair identification
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is open source and available for educational and clinical use.
-
-## Acknowledgments
-
-Developed for speech therapy professionals at Celssi.
+Celssin puheterapeuteille.

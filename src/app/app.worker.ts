@@ -20,14 +20,28 @@ const vowels = '(?![b-df-hj-np-tv-z]).';
 const vowelRegexp = new RegExp(vowels);
 
 function getWordCandidates(searchPhrase: string): string[] {
-  let wordCandidates = allWords
-    .filter((item) =>
-      new RegExp('^' + searchPhrase.replace(/\*/g, '.*').replace(/\%/g, '.').replace(/\(k\)/g, consonants).replace(/\(v\)/g, vowels) + '$').test(item)
-    )
-    .filter((w) => !w.endsWith('-') && !w.startsWith('-'));
+  try {
+    // Escape special regex characters except our custom wildcards
+    const pattern = '^' +
+      searchPhrase
+        .replace(/\*/g, '.*')
+        .replace(/\%/g, '.')
+        .replace(/\(k\)/g, consonants)
+        .replace(/\(v\)/g, vowels) +
+      '$';
 
-  wordCandidates = [...new Set(wordCandidates)];
-  return wordCandidates;
+    const regex = new RegExp(pattern);
+
+    let wordCandidates = allWords
+      .filter((item) => regex.test(item))
+      .filter((w) => !w.endsWith('-') && !w.startsWith('-'));
+
+    wordCandidates = [...new Set(wordCandidates)];
+    return wordCandidates;
+  } catch (error) {
+    console.error('Error creating regex pattern:', error);
+    return [];
+  }
 }
 
 function isWantedChange(change: string, wantedChange: string): boolean {
@@ -55,40 +69,61 @@ function getLengthArrays(words: string[]): string[][] {
 const lengthArrays = getLengthArrays(allWords);
 
 addEventListener('message', ({ data }: { data: ProcessPackage }) => {
-  if (data.type === 'minimum') {
-    const minimumPairs: MinimumPair[] = [];
-    const wordCandidates = getWordCandidates(data.searchPhrase);
+  try {
+    if (!data || !data.type) {
+      console.error('Invalid message received');
+      return;
+    }
 
-    wordCandidates.forEach((wordCandidate) => {
-      lengthArrays[wordCandidate.length - 1].forEach((word) => {
-        if (levenshtein.get(wordCandidate, word) === 1) {
-          const difference = getDifference(wordCandidate, word);
-          minimumPairs.push({ word: wordCandidate, pair: word, change: `${wordCandidate[difference]}->${word[difference]}` });
-        }
-      });
-    });
+    if (data.type === 'minimum') {
+      const minimumPairs: MinimumPair[] = [];
+      const wordCandidates = getWordCandidates(data.searchPhrase);
 
-    postMessage({ type: data.type, result: minimumPairs });
-  } else if (data.type === 'minimum-specific') {
-    let minimumPairs: MinimumPair[] = [];
+      wordCandidates.forEach((wordCandidate) => {
+        const lengthArray = lengthArrays[wordCandidate.length - 1];
+        if (!lengthArray) return;
 
-    data.words.forEach((wordCandidate) => {
-      lengthArrays[wordCandidate.length - 1].forEach((word) => {
-        if (levenshtein.get(wordCandidate, word) === 1) {
-          const difference = getDifference(wordCandidate, word);
-          const change = `${wordCandidate[difference]}->${word[difference]}`;
-
-          if (isWantedChange(change, data.wantedChange)) {
-            minimumPairs.push({ word: wordCandidate, pair: word, change });
+        lengthArray.forEach((word) => {
+          if (levenshtein.get(wordCandidate, word) === 1) {
+            const difference = getDifference(wordCandidate, word);
+            minimumPairs.push({ word: wordCandidate, pair: word, change: `${wordCandidate[difference]}->${word[difference]}` });
           }
-        }
+        });
       });
-    });
 
-    minimumPairs = minimumPairs.sort((a, b) => a.word.localeCompare(b.word));
-    postMessage({ type: data.type, result: minimumPairs });
-  } else if (data.type === 'normal') {
-    const wordCandidates = getWordCandidates(data.searchPhrase);
-    postMessage({ type: data.type, result: wordCandidates });
+      postMessage({ type: data.type, result: minimumPairs });
+    } else if (data.type === 'minimum-specific') {
+      let minimumPairs: MinimumPair[] = [];
+
+      if (!data.words || !Array.isArray(data.words)) {
+        postMessage({ type: data.type, result: minimumPairs });
+        return;
+      }
+
+      data.words.forEach((wordCandidate) => {
+        const lengthArray = lengthArrays[wordCandidate.length - 1];
+        if (!lengthArray) return;
+
+        lengthArray.forEach((word) => {
+          if (levenshtein.get(wordCandidate, word) === 1) {
+            const difference = getDifference(wordCandidate, word);
+            const change = `${wordCandidate[difference]}->${word[difference]}`;
+
+            if (isWantedChange(change, data.wantedChange)) {
+              minimumPairs.push({ word: wordCandidate, pair: word, change });
+            }
+          }
+        });
+      });
+
+      minimumPairs = minimumPairs.sort((a, b) => a.word.localeCompare(b.word));
+      postMessage({ type: data.type, result: minimumPairs });
+    } else if (data.type === 'normal') {
+      const wordCandidates = getWordCandidates(data.searchPhrase);
+      postMessage({ type: data.type, result: wordCandidates });
+    }
+  } catch (error) {
+    console.error('Worker error processing message:', error);
+    postMessage({ type: 'error', result: [] });
   }
 });

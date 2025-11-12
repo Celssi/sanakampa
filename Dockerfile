@@ -1,8 +1,28 @@
-FROM node:latest
+# Use specific Node version with Alpine for smaller image size
+FROM node:20-alpine
+
 EXPOSE 3000
-RUN mkdir /home/node/app
-RUN yarn global add serve @angular/cli
-COPY ./ /home/node/app
+
+# Create app directory
 WORKDIR /home/node/app
-RUN yarn install && ng build --configuration production
-ENTRYPOINT ["serve", "dist/sanakampa/"]
+
+# Install global dependencies
+RUN yarn global add serve @angular/cli
+
+# Copy package files first for better caching
+COPY package.json yarn.lock ./
+
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Copy application code
+COPY ./ ./
+
+# Build the application
+RUN ng build --configuration production
+
+# Use non-root user for security
+USER node
+
+# Start the application
+ENTRYPOINT ["serve", "dist/sanakampa/", "-l", "3000"]

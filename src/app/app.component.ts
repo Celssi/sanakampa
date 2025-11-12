@@ -1,6 +1,6 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, OnDestroy} from '@angular/core';
 import words from '../sanat.json';
-import {Subject} from 'rxjs';
+import {Subject, Subscription} from 'rxjs';
 import {debounceTime, distinctUntilChanged, map} from 'rxjs/operators';
 import {MinimumPair} from './MinimumPair';
 import {ProcessPackage} from './ProcessPackage';
@@ -10,29 +10,43 @@ import {ProcessPackage} from './ProcessPackage';
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   loading = false;
-  latestFoundWords: string[];
-  latestSearchPhrase: string;
-  subject = new Subject();
+  latestFoundWords: string[] = [];
+  latestSearchPhrase = '';
+  subject = new Subject<string>();
   showMinimumPairs = false;
   showHelp = false;
   minimumPairs: MinimumPair[] = [];
   numberOfWordSlices = 0;
-  worker: Worker;
+  worker: Worker | null = null;
+  private subscription: Subscription | null = null;
 
   constructor() {
     this.initWebWorker();
   }
 
   ngOnInit(): void {
-    this.subject
+    this.subscription = this.subject
       .pipe(
         debounceTime(1000),
         distinctUntilChanged(),
-        map((searchPhrase) => this.filterBy(searchPhrase))
+        map((searchPhrase: string) => this.filterBy(searchPhrase))
       )
       .subscribe();
+  }
+
+  ngOnDestroy(): void {
+    // Clean up subscription to prevent memory leaks
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+    }
+
+    // Terminate worker to free up resources
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
   }
 
   initWebWorker(): void {
@@ -43,40 +57,70 @@ export class AppComponent implements OnInit {
     this.worker = new Worker(new URL('./app.worker', import.meta.url));
 
     this.worker.onmessage = ({data}) => {
-      if (data.type === 'minimum') {
-        this.minimumPairs = data.result;
-      } else if (data.type === 'minimum-specific') {
-        this.numberOfWordSlices = this.numberOfWordSlices - 1;
-        this.minimumPairs.push(...data.result);
-        this.minimumPairs = this.minimumPairs.sort((a, b) => a.change.localeCompare(b.change));
-      } else if (data.type === 'normal') {
-        this.latestFoundWords = data.result;
-      }
+      try {
+        if (!data || !data.type) {
+          console.error('Invalid message received from worker');
+          this.loading = false;
+          return;
+        }
 
+        if (data.type === 'minimum') {
+          this.minimumPairs = data.result || [];
+        } else if (data.type === 'minimum-specific') {
+          this.numberOfWordSlices = this.numberOfWordSlices - 1;
+          this.minimumPairs.push(...(data.result || []));
+          this.minimumPairs = this.minimumPairs.sort((a, b) => a.change.localeCompare(b.change));
+        } else if (data.type === 'normal') {
+          this.latestFoundWords = data.result || [];
+        }
+
+        this.loading = false;
+      } catch (error) {
+        console.error('Error processing worker message:', error);
+        this.loading = false;
+      }
+    };
+
+    this.worker.onerror = (error) => {
+      console.error('Worker error:', error);
       this.loading = false;
     };
   }
 
-  filterBy(str): void {
+  filterBy(str: string): void {
+    // Input validation
+    if (!str || typeof str !== 'string') {
+      this.loading = false;
+      return;
+    }
+
     this.initWebWorker();
 
     this.loading = true;
     this.latestSearchPhrase = str;
     this.numberOfWordSlices = 0;
 
-    if (str.indexOf('->') > -1) {
-      this.showMinimumPairs = true;
-      this.latestFoundWords = [...new Set(words)];
-      this.generateSpecificMinimumPairs(str);
-    } else if (this.showMinimumPairs) {
-      this.generateMinimumPairs(str);
-    } else {
-      this.generateNormalResults(str);
+    try {
+      if (str.indexOf('->') > -1) {
+        this.showMinimumPairs = true;
+        this.latestFoundWords = [...new Set(words)];
+        this.generateSpecificMinimumPairs(str);
+      } else if (this.showMinimumPairs) {
+        this.generateMinimumPairs(str);
+      } else {
+        this.generateNormalResults(str);
+      }
+    } catch (error) {
+      console.error('Error during search:', error);
+      this.loading = false;
     }
   }
 
-  search($event): void {
-    this.subject.next($event.target.value.toLowerCase());
+  search($event: Event): void {
+    const target = $event.target as HTMLInputElement;
+    if (target && target.value) {
+      this.subject.next(target.value.toLowerCase());
+    }
   }
 
   toggleShowHelp(): void {
@@ -92,11 +136,11 @@ export class AppComponent implements OnInit {
   }
 
   generateNormalResults(searchPhrase: string): void {
-    this.worker.postMessage({type: 'normal', searchPhrase} as ProcessPackage);
+    this.worker!.postMessage({type: 'normal', searchPhrase} as ProcessPackage);
   }
 
   generateMinimumPairs(searchPhrase: string): void {
-    this.worker.postMessage({type: 'minimum', searchPhrase} as ProcessPackage);
+    this.worker!.postMessage({type: 'minimum', searchPhrase} as ProcessPackage);
   }
 
   generateSpecificMinimumPairs(wantedChange: string): void {
@@ -110,15 +154,7 @@ export class AppComponent implements OnInit {
 
     this.numberOfWordSlices = arrays.length;
     arrays.forEach((sliceOfWords: string[]) => {
-      this.worker.postMessage({words: sliceOfWords, type: 'minimum-specific', wantedChange} as ProcessPackage);
+      this.worker!.postMessage({words: sliceOfWords, type: 'minimum-specific', wantedChange} as ProcessPackage);
     });
-  }
-
-  getDifference(a: string, b: string): number {
-    if (a.length < b.length) {
-      [a, b] = [b, a];
-    }
-
-    return [...a].findIndex((chr, i) => chr !== b[i]);
   }
 }

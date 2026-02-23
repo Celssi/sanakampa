@@ -1,9 +1,26 @@
 /// <reference lib="webworker" />
 
 import allWords from '../sanat.json';
-import * as levenshtein from 'fast-levenshtein';
 import { MinimumPair } from './MinimumPair';
 import { ProcessPackage } from './ProcessPackage';
+
+function levenshteinDistance(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b[i - 1] === a[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
 
 function getDifference(a: string, b: string): number {
   if (a.length < b.length) {
@@ -22,19 +39,11 @@ const vowelRegexp = new RegExp(vowels);
 function getWordCandidates(searchPhrase: string): string[] {
   try {
     // Escape special regex characters except our custom wildcards
-    const pattern = '^' +
-      searchPhrase
-        .replace(/\*/g, '.*')
-        .replace(/\%/g, '.')
-        .replace(/\(k\)/g, consonants)
-        .replace(/\(v\)/g, vowels) +
-      '$';
+    const pattern = '^' + searchPhrase.replace(/\*/g, '.*').replace(/%/g, '.').replace(/\(k\)/g, consonants).replace(/\(v\)/g, vowels) + '$';
 
     const regex = new RegExp(pattern);
 
-    let wordCandidates = allWords
-      .filter((item) => regex.test(item))
-      .filter((w) => !w.endsWith('-') && !w.startsWith('-'));
+    let wordCandidates = allWords.filter((item) => regex.test(item)).filter((w) => !w.endsWith('-') && !w.startsWith('-'));
 
     wordCandidates = [...new Set(wordCandidates)];
     return wordCandidates;
@@ -84,7 +93,7 @@ addEventListener('message', ({ data }: { data: ProcessPackage }) => {
         if (!lengthArray) return;
 
         lengthArray.forEach((word) => {
-          if (levenshtein.get(wordCandidate, word) === 1) {
+          if (levenshteinDistance(wordCandidate, word) === 1) {
             const difference = getDifference(wordCandidate, word);
             minimumPairs.push({ word: wordCandidate, pair: word, change: `${wordCandidate[difference]}->${word[difference]}` });
           }
@@ -105,7 +114,7 @@ addEventListener('message', ({ data }: { data: ProcessPackage }) => {
         if (!lengthArray) return;
 
         lengthArray.forEach((word) => {
-          if (levenshtein.get(wordCandidate, word) === 1) {
+          if (levenshteinDistance(wordCandidate, word) === 1) {
             const difference = getDifference(wordCandidate, word);
             const change = `${wordCandidate[difference]}->${word[difference]}`;
 

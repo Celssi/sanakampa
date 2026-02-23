@@ -1,126 +1,105 @@
-import {Component, OnInit, OnDestroy} from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import words from '../sanat.json';
-import {Subject, Subscription} from 'rxjs';
-import {debounceTime, distinctUntilChanged, map} from 'rxjs/operators';
-import {MinimumPair} from './MinimumPair';
-import {ProcessPackage} from './ProcessPackage';
+import { SearchService } from './search.service';
+import { SearchBarComponent } from './search-bar/search-bar.component';
+import { HelpPanelComponent } from './help-panel/help-panel.component';
+import { ResultsListComponent } from './results-list/results-list.component';
+import { LoadingSpinnerComponent } from './loading-spinner/loading-spinner.component';
 
 @Component({
-    selector: 'app-root',
-    templateUrl: './app.component.html',
-    styleUrls: ['./app.component.scss'],
-    standalone: false
+  selector: 'app-root',
+  standalone: true,
+  imports: [SearchBarComponent, HelpPanelComponent, ResultsListComponent, LoadingSpinnerComponent],
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss']
 })
 export class AppComponent implements OnInit, OnDestroy {
-  loading = false;
-  latestFoundWords: string[] = [];
-  latestSearchPhrase = '';
-  subject = new Subject<string>();
+  @ViewChild(SearchBarComponent) searchBar!: SearchBarComponent;
+
   showMinimumPairs = false;
   showHelp = false;
-  minimumPairs: MinimumPair[] = [];
-  numberOfWordSlices = 0;
-  worker: Worker | null = null;
-  private subscription: Subscription | null = null;
+  latestSearchPhrase = '';
 
-  constructor() {
-    this.initWebWorker();
-  }
+  private subject = new Subject<string>();
+  private subscription: Subscription | null = null;
+  private searchState = {
+    words: [] as string[],
+    minimumPairs: [] as { word: string; pair: string; change: string }[],
+    loading: false,
+    error: false,
+    numberOfWordSlices: 0
+  };
+
+  private searchService = inject(SearchService);
 
   ngOnInit(): void {
-    this.subscription = this.subject
-      .pipe(
-        debounceTime(1000),
-        distinctUntilChanged(),
-        map((searchPhrase: string) => this.filterBy(searchPhrase))
-      )
-      .subscribe();
+    this.subscription = this.searchService.state$.subscribe((state) => {
+      this.searchState = { ...state };
+    });
+
+    this.subscription.add(this.subject.pipe(debounceTime(300), distinctUntilChanged()).subscribe((phrase) => this.filterBy(phrase)));
   }
 
   ngOnDestroy(): void {
-    // Clean up subscription to prevent memory leaks
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-    }
-
-    // Terminate worker to free up resources
-    if (this.worker) {
-      this.worker.terminate();
-      this.worker = null;
-    }
+    this.subscription?.unsubscribe();
+    this.searchService.ngOnDestroy();
   }
 
-  initWebWorker(): void {
-    if (this.worker) {
-      this.worker.terminate();
-    }
+  get words(): string[] {
+    return this.searchState.words;
+  }
 
-    this.worker = new Worker(new URL('./app.worker', import.meta.url));
+  get minimumPairs(): { word: string; pair: string; change: string }[] {
+    return this.searchState.minimumPairs;
+  }
 
-    this.worker.onmessage = ({data}) => {
-      try {
-        if (!data || !data.type) {
-          console.error('Invalid message received from worker');
-          this.loading = false;
-          return;
-        }
+  get loading(): boolean {
+    return this.searchState.loading;
+  }
 
-        if (data.type === 'minimum') {
-          this.minimumPairs = data.result || [];
-        } else if (data.type === 'minimum-specific') {
-          this.numberOfWordSlices = this.numberOfWordSlices - 1;
-          this.minimumPairs.push(...(data.result || []));
-          this.minimumPairs = this.minimumPairs.sort((a, b) => a.change.localeCompare(b.change));
-        } else if (data.type === 'normal') {
-          this.latestFoundWords = data.result || [];
-        }
+  get searchError(): boolean {
+    return this.searchState.error;
+  }
 
-        this.loading = false;
-      } catch (error) {
-        console.error('Error processing worker message:', error);
-        this.loading = false;
-      }
-    };
+  get numberOfWordSlices(): number {
+    return this.searchState.numberOfWordSlices;
+  }
 
-    this.worker.onerror = (error) => {
-      console.error('Worker error:', error);
-      this.loading = false;
-    };
+  onSearch(phrase: string): void {
+    this.latestSearchPhrase = phrase;
+    this.subject.next(phrase);
+  }
+
+  onClearSearch(): void {
+    this.latestSearchPhrase = '';
+    this.searchService.clear();
+    this.searchBar?.setValue('');
+  }
+
+  onTryExample(example: string): void {
+    this.searchBar?.setValue(example);
+    this.onSearch(example);
   }
 
   filterBy(str: string): void {
-    // Input validation
     if (!str || typeof str !== 'string') {
-      this.loading = false;
       return;
     }
-
-    this.initWebWorker();
-
-    this.loading = true;
-    this.latestSearchPhrase = str;
-    this.numberOfWordSlices = 0;
 
     try {
       if (str.indexOf('->') > -1) {
         this.showMinimumPairs = true;
-        this.latestFoundWords = [...new Set(words)];
-        this.generateSpecificMinimumPairs(str);
+        const allWords = [...new Set(words as string[])];
+        this.searchService.searchSpecificMinimumPairs(str, allWords);
       } else if (this.showMinimumPairs) {
-        this.generateMinimumPairs(str);
+        this.searchService.searchMinimumPairs(str);
       } else {
-        this.generateNormalResults(str);
+        this.searchService.search(str);
       }
     } catch (error) {
       console.error('Error during search:', error);
-      this.loading = false;
-    }
-  }
-
-  search($event: Event): void {
-    const target = $event.target as HTMLInputElement;
-    if (target && target.value) {
-      this.subject.next(target.value.toLowerCase());
     }
   }
 
@@ -130,32 +109,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   toggleShowMinimumPairs(): void {
     this.showMinimumPairs = !this.showMinimumPairs;
-
-    if (this.showMinimumPairs) {
-      this.generateMinimumPairs(this.latestSearchPhrase);
+    if (this.showMinimumPairs && this.latestSearchPhrase) {
+      this.searchService.searchMinimumPairs(this.latestSearchPhrase);
     }
-  }
-
-  generateNormalResults(searchPhrase: string): void {
-    this.worker!.postMessage({type: 'normal', searchPhrase} as ProcessPackage);
-  }
-
-  generateMinimumPairs(searchPhrase: string): void {
-    this.worker!.postMessage({type: 'minimum', searchPhrase} as ProcessPackage);
-  }
-
-  generateSpecificMinimumPairs(wantedChange: string): void {
-    this.minimumPairs = [];
-    const allWords = [...this.latestFoundWords];
-    const arrays = [];
-
-    while (allWords.length > 0) {
-      arrays.push(allWords.splice(0, 100));
-    }
-
-    this.numberOfWordSlices = arrays.length;
-    arrays.forEach((sliceOfWords: string[]) => {
-      this.worker!.postMessage({words: sliceOfWords, type: 'minimum-specific', wantedChange} as ProcessPackage);
-    });
   }
 }
